@@ -153,6 +153,8 @@ type View struct {
 	// KeybindOnEdit should be set to true when you want to execute keybindings even when the view is editable
 	// (this is usually not the case)
 	KeybindOnEdit bool
+
+	ScreenManager *ScreenManager
 }
 
 type searcher struct {
@@ -387,7 +389,7 @@ func (v *View) setRune(x, y int, ch rune, fgColor, bgColor Attribute) error {
 		ch = ' '
 	}
 
-	tcellSetCell(v.x0+x+1, v.y0+y+1, ch, fgColor, bgColor, v.outMode)
+	v.ScreenManager.tcellSetCell(v.x0+x+1, v.y0+y+1, ch, fgColor, bgColor, v.outMode)
 
 	return nil
 }
@@ -846,7 +848,7 @@ func (v *View) clearRunes() {
 	maxX, maxY := v.Size()
 	for x := 0; x < maxX; x++ {
 		for y := 0; y < maxY; y++ {
-			tcellSetCell(v.x0+x+1, v.y0+y+1, ' ', v.FgColor, v.BgColor, v.outMode)
+			v.ScreenManager.tcellSetCell(v.x0+x+1, v.y0+y+1, ' ', v.FgColor, v.BgColor, v.outMode)
 		}
 	}
 }

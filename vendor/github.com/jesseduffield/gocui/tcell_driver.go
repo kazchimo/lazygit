@@ -11,23 +11,28 @@ import (
 // We probably don't want this being a global variable for YOLO for now
 var Screen tcell.Screen
 
+type ScreenManager struct {
+	Screen tcell.Screen
+}
+
 // tcellInit initializes tcell screen for use.
-func tcellInit() error {
+func tcellInit() (*ScreenManager, error) {
 	if s, e := tcell.NewScreen(); e != nil {
-		return e
+		return nil, e
 	} else if e = s.Init(); e != nil {
-		return e
+		return nil, e
 	} else {
+		// hacking this for now
 		Screen = s
-		return nil
+		return &ScreenManager{Screen: s}, e
 	}
 }
 
 // tcellSetCell sets the character cell at a given location to the given
 // content (rune) and attributes using provided OutputMode
-func tcellSetCell(x, y int, ch rune, fg, bg Attribute, omode OutputMode) {
+func (s *ScreenManager) tcellSetCell(x, y int, ch rune, fg, bg Attribute, omode OutputMode) {
 	st := getTcellStyle(fg, bg, omode)
-	Screen.SetContent(x, y, ch, nil, st)
+	s.Screen.SetContent(x, y, ch, nil, st)
 }
 
 // getTcellStyle creates tcell.Style from Attributes
@@ -120,8 +125,8 @@ var (
 )
 
 // pollEvent get tcell.Event and transform it into gocuiEvent
-func pollEvent() GocuiEvent {
-	tev := Screen.PollEvent()
+func (s *ScreenManager) pollEvent() GocuiEvent {
+	tev := s.Screen.PollEvent()
 	switch tev := tev.(type) {
 	case *tcell.EventInterrupt:
 		return GocuiEvent{Type: eventInterrupt}

@@ -132,16 +132,19 @@ type Gui struct {
 	SearchEscapeKey    interface{}
 	NextSearchMatchKey interface{}
 	PrevSearchMatchKey interface{}
+
+	ScreenManager *ScreenManager
 }
 
 // NewGui returns a new Gui object with a given output mode.
 func NewGui(mode OutputMode, supportOverlaps bool, recordEvents bool) (*Gui, error) {
-	err := tcellInit()
+	g := &Gui{}
+
+	screenManager, err := tcellInit()
 	if err != nil {
 		return nil, err
 	}
-
-	g := &Gui{}
+	g.ScreenManager = screenManager
 
 	g.outputMode = mode
 
@@ -158,7 +161,7 @@ func NewGui(mode OutputMode, supportOverlaps bool, recordEvents bool) (*Gui, err
 			return nil, err
 		}
 	} else {
-		g.maxX, g.maxY = Screen.Size()
+		g.maxX, g.maxY = g.ScreenManager.Screen.Size()
 	}
 
 	g.BgColor, g.FgColor, g.FrameColor = ColorDefault, ColorDefault, ColorDefault
@@ -184,7 +187,7 @@ func (g *Gui) Close() {
 	go func() {
 		g.stop <- struct{}{}
 	}()
-	Screen.Fini()
+	g.ScreenManager.Screen.Fini()
 }
 
 // Size returns the terminal's size.
@@ -200,7 +203,7 @@ func (g *Gui) SetRune(x, y int, ch rune, fgColor, bgColor Attribute) error {
 		// swallowing error because it's not that big of a deal
 		return nil
 	}
-	tcellSetCell(x, y, ch, fgColor, bgColor, g.outputMode)
+	g.ScreenManager.tcellSetCell(x, y, ch, fgColor, bgColor, g.outputMode)
 	return nil
 }
 
@@ -210,7 +213,7 @@ func (g *Gui) Rune(x, y int) (rune, error) {
 	if x < 0 || y < 0 || x >= g.maxX || y >= g.maxY {
 		return ' ', errors.New("invalid point")
 	}
-	c, _, _, _ := Screen.GetContent(x, y)
+	c, _, _, _ := g.ScreenManager.Screen.GetContent(x, y)
 	return c, nil
 }
 
@@ -242,6 +245,7 @@ func (g *Gui) SetView(name string, x0, y0, x1, y1 int, overlaps byte) (*View, er
 	g.views = append(g.views, v)
 
 	g.Mutexes.ViewsMutex.Unlock()
+	v.ScreenManager = g.ScreenManager
 
 	return v, errors.Wrap(ErrUnknownView, 0)
 }
@@ -543,13 +547,13 @@ func (g *Gui) MainLoop() error {
 			case <-g.stop:
 				return
 			default:
-				g.gEvents <- pollEvent()
+				g.gEvents <- g.ScreenManager.pollEvent()
 			}
 		}
 	}()
 
 	if g.Mouse {
-		Screen.EnableMouse()
+		g.ScreenManager.Screen.EnableMouse()
 	}
 
 	if err := g.flush(); err != nil {
@@ -621,7 +625,7 @@ func (g *Gui) handleEvent(ev *GocuiEvent) error {
 func (g *Gui) flush() error {
 	g.clear(g.FgColor, g.BgColor)
 
-	maxX, maxY := Screen.Size()
+	maxX, maxY := g.ScreenManager.Screen.Size()
 	// if GUI's size has changed, we need to redraw all views
 	if maxX != g.maxX || maxY != g.maxY {
 		for _, v := range g.views {
@@ -685,16 +689,16 @@ func (g *Gui) flush() error {
 			return err
 		}
 	}
-	Screen.Show()
+	g.ScreenManager.Screen.Show()
 	return nil
 }
 
 func (g *Gui) clear(fg, bg Attribute) (int, int) {
 	st := getTcellStyle(fg, bg, g.outputMode)
-	w, h := Screen.Size()
+	w, h := g.ScreenManager.Screen.Size()
 	for row := 0; row < h; row++ {
 		for col := 0; col < w; col++ {
-			Screen.SetContent(col, row, ' ', nil, st)
+			g.ScreenManager.Screen.SetContent(col, row, ' ', nil, st)
 		}
 	}
 	return w, h
@@ -982,13 +986,13 @@ func (g *Gui) draw(v *View) error {
 			// tcell is hiding cursor by setting coordinates outside of screen.
 			// Keeping it here for now, as I'm not 100% sure :)
 			if cx >= 0 && cx < gMaxX && cy >= 0 && cy < gMaxY {
-				Screen.ShowCursor(cx, cy)
+				g.ScreenManager.Screen.ShowCursor(cx, cy)
 			} else {
-				Screen.HideCursor()
+				g.ScreenManager.Screen.HideCursor()
 			}
 		}
 	} else {
-		Screen.HideCursor()
+		g.ScreenManager.Screen.HideCursor()
 	}
 
 	v.clearRunes()
